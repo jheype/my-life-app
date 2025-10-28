@@ -134,5 +134,5 @@ NEXTAUTH_URL=http://localhost:3000
 <!-- Quick Links -->
 <p align="center">
   <a href="#getting-started">Get Started</a> •
-  <a href="#features">Features</a> •
+  <a href="#features">Features</a> 
 </p>
