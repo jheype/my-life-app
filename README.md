@@ -26,7 +26,6 @@
   <li><a href="#environment">Environment Variables</a></li>
   <li><a href="#project-structure">Project Structure</a></li>
   <li><a href="#security">Security</a></li>
-  <li><a href="#roadmap">Roadmap</a></li>
   <li><a href="#license">License</a></li>
   <li><a href="#author">Author</a></li>
 </ol>
@@ -65,7 +64,7 @@
 <h2 id="getting-started">🚀 Getting Started</h2>
 
 <p><strong>1) Clone</strong></p>
-<pre><code>git clone https://github.com/&lt;jheype&gt;/my-life.git
+<pre><code>git clone https://github.com/jheype/my-life.git
 cd my-life
 </code></pre>
 
@@ -129,12 +128,11 @@ NEXTAUTH_URL=http://localhost:3000
 <!-- Author -->
 <h2 id="author">🤝 Author</h2>
 <p>
-  Built by <strong>João Pedro</strong><br/>
+  Built by <strong>João Almeida</strong><br/>
 </p>
 
 <!-- Quick Links -->
 <p align="center">
   <a href="#getting-started">Get Started</a> •
   <a href="#features">Features</a> •
-  <a href="#roadmap">Roadmap</a>
 </p>
