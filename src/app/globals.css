@@ -1,26 +1,146 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* =========================
+   THEME TOKENS (TAILWIND v4)
+   ========================= */
+@theme {
+  /* Base (light) */
+  --color-base-bg:    #F8F7F3;  /* off-white */
+  --color-base-card:  #FFFFFF;  /* surfaces */
+  --color-base-ink:   #0F172A;  /* slate-900 */
+  --color-base-muted: #64748B;  /* slate-500 */
+  --color-base-border:#E5E7EB;  /* zinc-200 */
+
+  /* Brand (emerald) */
+  --color-brand-50:   #ECFDF5;
+  --color-brand-100:  #D1FAE5;
+  --color-brand-200:  #A7F3D0;
+  --color-brand-300:  #6EE7B7;
+  --color-brand-400:  #34D399;
+  --color-brand-500:  #10B981;
+  --color-brand-600:  #059669;
+  --color-brand-700:  #047857;
+  --color-brand-800:  #065F46;
+  --color-brand-900:  #064E3B;
+
+  /* Accent (danger) */
+  --color-redbrand-50:  #f7786f;
+  --color-redbrand-100: #e35b52;
+  --color-redbrand-200: #d6483e;
+  --color-redbrand-300: #c94238;
+  --color-redbrand-400: #b5382f;
+  --color-redbrand-500: #9c2f27;
+  --color-redbrand-600: #82251e;
+  --color-redbrand-700: #631b16;
+  --color-redbrand-800: #4a1310;
+  --color-redbrand-900: #360c0a;
+
+  --radius-xl: 14px;
+  --shadow-soft: 0 8px 24px rgba(0,0,0,0.08);
+
+  --container-app: 64rem;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* =========================
+   DARK THEME OVERRIDES
+   (apenas variáveis)
+   ========================= */
+:root { color-scheme: light; }
+.dark {
+  color-scheme: dark;
+
+  /* petróleo escuro + alto contraste suave */
+  --color-base-bg:     #0C1110;   /* bg */
+  --color-base-card:   #0F1413;   /* surfaces */
+  --color-base-ink:    #E5E7EB;   /* texto */
+  --color-base-muted:  #9CA3AF;   /* muteds */
+  --color-base-border: #1F2937;   /* linhas */
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* =========================
+   BASE
+   ========================= */
+html, body { height: 100%; }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  @apply antialiased;
+  background-color: var(--color-base-bg);
+  color: var(--color-base-ink);
 }
+
+/* =========================
+   UTILITIES
+   ========================= */
+@utility shadow-soft { box-shadow: var(--shadow-soft); }
+
+.label { @apply mb-1 text-sm; color: var(--color-base-muted); }
+
+/* Botões */
+.btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 font-medium transition;
+  background-color: transparent;
+  color: var(--color-base-ink);
+  border: 1px solid transparent;
+}
+
+.btn-primary {
+  background-color: var(--color-brand-600);
+  color: #fff;
+  border-color: var(--color-brand-700);
+}
+.btn-primary:hover {
+  background-color: var(--color-brand-700);
+}
+
+.btn-red {
+  background-color: var(--color-redbrand-200);
+  color: #fff;
+  border-color: var(--color-redbrand-300);
+}
+.btn-red:hover { background-color: var(--color-redbrand-300); }
+
+.btn-ghost {
+  background-color: transparent;
+  color: var(--color-base-ink);
+  border-color: var(--color-base-border);
+}
+.btn-ghost:hover {
+  /* leve elevação da surface no hover, funciona nos 2 temas */
+  background-color: color-mix(in oklab, var(--color-base-card), var(--color-base-ink) 6%);
+}
+
+/* Cards */
+.card {
+  border-radius: var(--radius-xl);
+  background-color: var(--color-base-card);
+  border: 1px solid var(--color-base-border);
+  box-shadow: var(--shadow-soft);
+}
+
+/* Inputs */
+.input {
+  width: 100%;
+  border-radius: var(--radius-xl);
+  padding: 0.5rem 0.75rem; /* ~py-2 px-3 */
+  outline: none;
+
+  background-color: var(--color-base-card);
+  color: var(--color-base-ink);
+  border: 1px solid var(--color-base-border);
+}
+.input::placeholder { color: var(--color-base-muted); }
+.input:focus { box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-brand-300), white 30%); }
+
+/* =========================
+   HOTFIX (para JSX legados)
+   - Se você usou bg-white/border-zinc-200/text-zinc-600 etc.,
+     isso garante que respeitem o tema escuro sem refatorar tudo agora.
+   ========================= */
+.dark .bg-white        { background-color: var(--color-base-card) !important; }
+.dark .border-zinc-200 { border-color: var(--color-base-border) !important; }
+.dark .text-zinc-600   { color: var(--color-base-muted) !important; }
+.dark .text-zinc-700   { color: var(--color-base-ink) !important; }
+.dark .bg-zinc-50      { background-color: color-mix(in oklab, var(--color-base-card), var(--color-base-ink) 4%) !important; }
+
+/* Container helper (se você usa) */
+.max-w-app { max-width: var(--container-app); }
