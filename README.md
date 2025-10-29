@@ -82,7 +82,7 @@ NEXTAUTH_URL=http://localhost:3000
 <pre><code>npm run dev
 </code></pre>
 
-<p>Visit: <a href="http://localhost:3000" target="_blank" rel="noopener">http://localhost:3000</a></p>
+<p>Visit: <a href="https://my-life-jade-rho.vercel.app/ target="_blank" rel="noopener">https://my-life-jade-rho.vercel.app/</a></p>
 
 <!-- Environment -->
 <h2 id="environment">🔧 Environment Variables</h2>
