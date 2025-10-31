@@ -1,304 +1,572 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import Modal from "@/components/ui/Modal";
-import { FaDumbbell, FaTrash, FaCheck, FaPlus, FaXmark } from "react-icons/fa6";
 
-/** Types mirrored from model (client-side) */
+import { useEffect, useMemo, useRef, useState } from "react";
+import useSWR, { mutate } from "swr";
+import { AnimatePresence } from "framer-motion";
+import Modal from "@/components/ui/Modal";
+import DeletableRow from "@/components/ui/DeletableRow";
+import {
+  FaDumbbell,
+  FaTrash,
+  FaCheck,
+  FaPlus,
+  FaXmark,
+} from "react-icons/fa6";
+
 type SetItem = { reps: number; weight?: number; done?: boolean };
 type Exercise = { name: string; notes?: string; sets: SetItem[] };
 type Workout = {
   _id: string;
-  date: string;
+  date: string; // "YYYY-MM-DD"
   title: string;
   notes?: string;
-  exercises: Exercise[];
+  exercises?: Exercise[];
 };
 
 function formatMonthKey(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function makeSetKey(workoutId: string, exIdx: number, setIdx: number) {
+  return `${workoutId}:${exIdx}:${setIdx}`;
+}
+
+const fetcher = (url: string) =>
+  fetch(url, { cache: "no-store" }).then((r) => r.json());
+
 export default function WorkoutPanel() {
-  // Filter
   const [month, setMonth] = useState(formatMonthKey(new Date()));
 
-  // Data
-  const [workouts, setWorkouts] = useState<Workout[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  // Modal
   const [open, setOpen] = useState(false);
 
-  // Form for new workout
-  const [date, setDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState<string>(() =>
+    new Date().toISOString().slice(0, 10)
+  );
   const [title, setTitle] = useState("Push day");
   const [notes, setNotes] = useState("");
-  const [exercises, setExercises] = useState<Exercise[]>([
-    { name: "Bench Press", notes: "", sets: [{ reps: 8, weight: 60 }, { reps: 8, weight: 60 }, { reps: 6, weight: 65 }] },
+  const [exercisesForm, setExercisesForm] = useState<Exercise[]>([
+    {
+      name: "Bench Press",
+      notes: "",
+      sets: [
+        { reps: 8, weight: 60 },
+        { reps: 8, weight: 60 },
+        { reps: 6, weight: 65 },
+      ],
+    },
   ]);
 
-  async function load() {
-    setLoading(true);
-    const res = await fetch(`/api/workouts?month=${month}`, { cache: "no-store" });
-    if (res.ok) setWorkouts(await res.json());
-    setLoading(false);
-  }
+  // animações / estado visual
+  const [exitingWorkoutIds, setExitingWorkoutIds] = useState<Set<string>>(
+    new Set()
+  );
+  const [exitingSets, setExitingSets] = useState<Record<string, boolean>>({});
 
-  useEffect(() => { load(); }, [month]);
+  // evita double submit de criação
+  const creatingRef = useRef(false);
 
-  /** Create workout */
-  async function createWorkout(e: React.FormEvent) {
-    e.preventDefault();
-    const payload = {
-      date,
-      title: title.trim(),
-      notes: notes.trim() || undefined,
-      exercises,
-    };
-    const res = await fetch("/api/workouts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (res.ok) {
-      setOpen(false);
-      resetForm();
-      load();
+  // marca ids que já foram deletados no servidor
+  const deletedOnce = useRef<Set<string>>(new Set());
+
+  // SWR data
+  const { data: workoutsData, isLoading } = useSWR<Workout[]>(
+    `/api/workouts?month=${month}`,
+    fetcher
+  );
+  const workouts = workoutsData ?? [];
+
+  // agrupa por dia
+  const byDay = useMemo(() => {
+    const map = new Map<string, Workout[]>();
+    for (const w of workouts) {
+      const key = w.date; // já vem "YYYY-MM-DD"
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(w);
     }
-  }
+    return Array.from(map.entries()).sort((a, b) => (a[0] < b[0] ? 1 : -1));
+  }, [workouts]);
 
+  // helpers form
   function resetForm() {
-    setDate(new Date().toISOString().slice(0,10));
+    setDate(new Date().toISOString().slice(0, 10));
     setTitle("Push day");
     setNotes("");
-    setExercises([{ name: "Bench Press", notes: "", sets: [{ reps: 8, weight: 60 }, { reps: 8, weight: 60 }, { reps: 6, weight: 65 }] }]);
+    setExercisesForm([
+      {
+        name: "Bench Press",
+        notes: "",
+        sets: [
+          { reps: 8, weight: 60 },
+          { reps: 8, weight: 60 },
+          { reps: 6, weight: 65 },
+        ],
+      },
+    ]);
   }
 
-  /** Delete workout */
-  async function deleteWorkout(id: string) {
-    await fetch(`/api/workouts/${id}`, { method: "DELETE" });
-    load();
-  }
-
-  /** Toggle a set done (client-side, then PATCH whole exercises) */
-  async function toggleSetDone(w: Workout, exIdx: number, setIdx: number) {
-    const next = structuredClone(w.exercises) as Exercise[];
-    next[exIdx].sets[setIdx].done = !next[exIdx].sets[setIdx].done;
-    await fetch(`/api/workouts/${w._id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ exercises: next }),
-    });
-    load();
-  }
-
-  /** Remove a set from an exercise */
-  async function removeSet(w: Workout, exIdx: number, setIdx: number) {
-    const next = structuredClone(w.exercises) as Exercise[];
-    next[exIdx].sets.splice(setIdx, 1);
-    await fetch(`/api/workouts/${w._id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ exercises: next }),
-    });
-    load();
-  }
-
-  /** UI helpers to edit form arrays */
   function addExercise() {
-    setExercises((xs) => [...xs, { name: "New exercise", notes: "", sets: [{ reps: 10 }] }]);
+    setExercisesForm((xs) => [
+      ...xs,
+      {
+        name: "New exercise",
+        notes: "",
+        sets: [{ reps: 10 }],
+      },
+    ]);
   }
+
   function removeExercise(idx: number) {
-    setExercises((xs) => xs.filter((_, i) => i !== idx));
+    setExercisesForm((xs) => xs.filter((_, i) => i !== idx));
   }
+
   function addSet(idx: number) {
-    setExercises((xs) => {
+    setExercisesForm((xs) => {
       const copy = structuredClone(xs) as Exercise[];
       copy[idx].sets.push({ reps: 10 });
       return copy;
     });
   }
-  function removeSetFromForm(eIdx: number, sIdx: number) {
-    setExercises((xs) => {
+
+  function removeSetFromForm(exIdx: number, sIdx: number) {
+    setExercisesForm((xs) => {
       const copy = structuredClone(xs) as Exercise[];
-      copy[eIdx].sets.splice(sIdx, 1);
+      copy[exIdx].sets.splice(sIdx, 1);
       return copy;
     });
   }
 
-  // Group workouts by day
-  const byDay = useMemo(() => {
-    const map = new Map<string, Workout[]>();
-    for (const w of workouts) {
-      const key = new Date(w.date).toISOString().slice(0,10);
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(w);
+  // CREATE workout
+  async function createWorkout(e: React.FormEvent) {
+    e.preventDefault();
+    if (creatingRef.current) return;
+    creatingRef.current = true;
+
+    const payload = {
+      date,
+      title: title.trim(),
+      notes: notes.trim() || undefined,
+      exercises: exercisesForm,
+    };
+
+    const res = await fetch("/api/workouts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      creatingRef.current = false;
+      return;
     }
-    return Array.from(map.entries()).sort((a,b) => (a[0] < b[0] ? 1 : -1));
-  }, [workouts]);
+
+    setOpen(false);
+    resetForm();
+    creatingRef.current = false;
+
+    mutate(`/api/workouts?month=${month}`);
+  }
+
+  // pede pra deletar (anima imediatamente + já manda DELETE)
+  async function handleImmediateDelete(workoutId: string) {
+    // se já deletamos no servidor, não faz nada
+    if (deletedOnce.current.has(workoutId)) return;
+
+    // marca visualmente como "exiting" para animar vermelho + slide
+    setExitingWorkoutIds((prev) => {
+      const next = new Set(prev);
+      next.add(workoutId);
+      return next;
+    });
+
+    // manda DELETE no servidor já
+    const res = await fetch(`/api/workouts/${workoutId}`, {
+      method: "DELETE",
+    });
+
+    if (!res.ok && res.status !== 404) {
+      console.error("Failed to delete workout", workoutId, res.status);
+    }
+
+    deletedOnce.current.add(workoutId);
+
+    // refaz o fetch global pra sumir da lista
+    mutate(`/api/workouts?month=${month}`);
+  }
+
+  // callback chamado quando a animação termina
+  function finalizeDeleteWorkout(workoutId: string) {
+    // só limpa o estado local de animação
+    setExitingWorkoutIds((prev) => {
+      const next = new Set(prev);
+      next.delete(workoutId);
+      return next;
+    });
+  }
+
+  // ===== SETS =====
+  function requestDeleteSet(workout: Workout, exIdx: number, setIdx: number) {
+    const key = makeSetKey(workout._id, exIdx, setIdx);
+    setExitingSets((prev) => ({ ...prev, [key]: true }));
+    // remoção de set só persiste no finalizeDeleteSet, porque precisa PATCH
+  }
+
+  async function finalizeDeleteSet(
+    workout: Workout,
+    exIdx: number,
+    setIdx: number
+  ) {
+    // clona os exercises atuais desse workout
+    const currentExercises = structuredClone(
+      workout.exercises ?? []
+    ) as Exercise[];
+
+    // remove set local
+    currentExercises[exIdx].sets.splice(setIdx, 1);
+
+    // PATCH no servidor para salvar nova lista de sets
+    await fetch(`/api/workouts/update`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: workout._id,
+        exercises: currentExercises,
+      }),
+    });
+
+    // limpa flag de animação daquele set
+    const k = makeSetKey(workout._id, exIdx, setIdx);
+    setExitingSets((prev) => {
+      const { [k]: _, ...rest } = prev;
+      return rest;
+    });
+
+    mutate(`/api/workouts?month=${month}`);
+  }
+
+  async function toggleSetDone(
+    workout: Workout,
+    exIdx: number,
+    setIdx: number
+  ) {
+    const currentExercises = structuredClone(
+      workout.exercises ?? []
+    ) as Exercise[];
+
+    currentExercises[exIdx].sets[setIdx].done =
+      !currentExercises[exIdx].sets[setIdx].done;
+
+    await fetch(`/api/workouts/update`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: workout._id,
+        exercises: currentExercises,
+      }),
+    });
+
+    mutate(`/api/workouts?month=${month}`);
+  }
 
   return (
     <div className="grid gap-6">
-      {/* Controls */}
+      {/* top actions */}
       <div className="flex flex-wrap items-center gap-2">
         <button className="btn btn-primary" onClick={() => setOpen(true)}>
           New workout
         </button>
+
         <div className="ml-auto flex items-center gap-2">
           <label className="label">Month</label>
           <input
             type="month"
             className="input !w-auto"
             value={month}
-            onChange={(e) => setMonth(e.target.value)}
+            onChange={(e) => {
+              setMonth(e.target.value);
+            }}
           />
         </div>
       </div>
 
-      {/* List by day */}
+      {/* grouped list */}
       <div className="grid gap-4">
-        {byDay.length === 0 && (
+        {byDay.length === 0 && !isLoading && (
           <p className="text-sm text-zinc-500">No workouts for this month.</p>
         )}
+
         {byDay.map(([day, items]) => (
           <div key={day}>
             <p className="mb-2 text-sm font-medium text-zinc-600">{day}</p>
+
             <div className="grid gap-3">
               <AnimatePresence initial={false}>
-                {items.map((w) => (
-                  <motion.div
-                    key={w._id}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 6 }}
-                    className="rounded-xl border border-[var(--color-base-border)] bg-[var(--color-base-card)] p-3"
-                  >
-                    <div className="mb-2 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <FaDumbbell />
-                        <p className="font-semibold">{w.title}</p>
-                      </div>
-                      <button className="text-red-600" onClick={() => deleteWorkout(w._id)}>
-                        <FaTrash />
-                      </button>
-                    </div>
-                    {w.notes && <p className="mb-2 text-sm text-zinc-600">{w.notes}</p>}
+                {items.map((w) => {
+                  const wExiting = exitingWorkoutIds.has(w._id);
 
-                    {/* exercises */}
-                    <div className="grid gap-3">
-                      {w.exercises.map((ex, exIdx) => (
-                        <div key={exIdx} className="rounded-lg border border-[var(--color-base-border)]">
-                          <div className="flex items-center justify-between border-b border-[var(--color-base-border)] bg-[color-mix(in_ oklab, var(--color-base-card), var(--color-base-ink)_6%)] px-3 py-2">
-                            <p className="font-medium">{ex.name}</p>
-                            {ex.notes && <p className="text-xs text-zinc-500">{ex.notes}</p>}
-                          </div>
-                          <div className="p-3">
-                            <div className="grid gap-2">
-                              {ex.sets.map((s, sIdx) => {
-                                const baseSet =
-                                  "flex items-center justify-between rounded-md border px-3 py-2 transition-colors";
-                                const pendingSet =
-                                  "bg-[var(--color-base-card)] border-[var(--color-base-border)] text-[var(--color-base-ink)]";
-                                const doneSet = [
-                                  "bg-brand-100 border-brand-600 text-brand-800",
-                                  "dark:bg-brand-800 dark:border-brand-700 dark:text-brand-100",
-                                ].join(" ");
-                                const toggleBase =
-                                  "inline-flex h-6 w-6 items-center justify-center rounded-full border transition";
-                                const toggleDone = "bg-brand-600 text-white border-brand-700";
-                                const toggleIdle =
-                                  "bg-[var(--color-base-card)] text-[var(--color-base-ink)] border-[var(--color-base-border)]";
-
-                                return (
-                                  <div
-                                    key={sIdx}
-                                    className={`${baseSet} ${s.done ? doneSet : pendingSet}`}
-                                  >
-                                    <div className="flex items-center gap-3">
-                                      <button
-                                        className={`${toggleBase} ${s.done ? toggleDone : toggleIdle}`}
-                                        onClick={() => toggleSetDone(w, exIdx, sIdx)}
-                                        aria-label="Toggle set done"
-                                        title="Toggle set done"
-                                      >
-                                        <FaCheck className="text-xs" />
-                                      </button>
-                                      <span className="text-sm">
-                                        {s.reps} reps{typeof s.weight === "number" ? ` • ${s.weight} kg` : ""}
-                                      </span>
-                                    </div>
-                                    <button
-                                      className="text-red-600"
-                                      onClick={() => removeSet(w, exIdx, sIdx)}
-                                    >
-                                      <FaXmark />
-                                    </button>
-                                  </div>
-                                );
-                              })}
-                              {!ex.sets.length && (
-                                <p className="text-xs text-zinc-500">No sets yet.</p>
+                  return (
+                    <DeletableRow
+                      key={w._id}
+                      exiting={wExiting}
+                      onExitedAction={() => finalizeDeleteWorkout(w._id)}
+                      enableDrag
+                      onDragDelete={() => handleImmediateDelete(w._id)}
+                    >
+                      <div
+                        className={[
+                          "rounded-xl border p-3 transition-colors",
+                          wExiting
+                            ? "bg-red-100 border-red-500 text-[var(--color-base-ink)] dark:bg-red-900/40 dark:border-red-600"
+                            : "border-[var(--color-base-border)] bg-[var(--color-base-card)] text-[var(--color-base-ink)]",
+                        ].join(" ")}
+                      >
+                        {/* header workout */}
+                        <div className="mb-2 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <FaDumbbell />
+                            <div className="flex flex-col">
+                              <p className="font-semibold">{w.title}</p>
+                              {w.notes && (
+                                <p className="text-xs text-zinc-500">
+                                  {w.notes}
+                                </p>
                               )}
                             </div>
                           </div>
+
+                          {/* botão de lixeira */}
+                          <button
+                            className="text-red-600"
+                            onClick={() => handleImmediateDelete(w._id)}
+                            aria-label="Delete workout"
+                            title="Delete workout"
+                          >
+                            <FaTrash />
+                          </button>
                         </div>
-                      ))}
-                    </div>
-                  </motion.div>
-                ))}
+
+                        {/* exercícios */}
+                        <div className="grid gap-3">
+                          {(w.exercises ?? []).map((ex, exIdx) => (
+                            <div
+                              key={exIdx}
+                              className="rounded-lg border border-[var(--color-base-border)]"
+                            >
+                              {/* header do exercício */}
+                              <div className="flex flex-col gap-1 border-b border-[var(--color-base-border)] bg-[color-mix(in_ oklab, var(--color-base-card), var(--color-base-ink)_6%)] px-3 py-2 md:flex-row md:items-center md:justify-between">
+                                <p className="font-medium">{ex.name}</p>
+                                {ex.notes && (
+                                  <p className="text-xs text-zinc-500">
+                                    {ex.notes}
+                                  </p>
+                                )}
+                              </div>
+
+                              {/* sets */}
+                              <div className="p-3">
+                                <div className="grid gap-2">
+                                  {(ex.sets ?? []).map((s, sIdx) => {
+                                    const key = makeSetKey(
+                                      w._id,
+                                      exIdx,
+                                      sIdx
+                                    );
+                                    const isExiting = !!exitingSets[key];
+
+                                    const baseSet =
+                                      "flex items-center justify-between rounded-md border px-3 py-2 transition-colors";
+                                    const pendingSet =
+                                      "bg-[var(--color-base-card)] border-[var(--color-base-border)] text-[var(--color-base-ink)]";
+                                    const doneSet = [
+                                      "bg-brand-100 border-brand-600 text-brand-800",
+                                      "dark:bg-brand-800 dark:border-brand-700 dark:text-brand-100",
+                                    ].join(" ");
+                                    const exitingSet =
+                                      "bg-red-100 border-red-500 text-[var(--color-base-ink)] dark:bg-red-900/40 dark:border-red-600";
+
+                                    return (
+                                      <DeletableRow
+                                        key={key}
+                                        exiting={isExiting}
+                                        onExitedAction={() =>
+                                          finalizeDeleteSet(
+                                            w,
+                                            exIdx,
+                                            sIdx
+                                          )
+                                        }
+                                        enableDrag
+                                        onDragDelete={() =>
+                                          requestDeleteSet(
+                                            w,
+                                            exIdx,
+                                            sIdx
+                                          )
+                                        }
+                                      >
+                                        <div
+                                          className={[
+                                            baseSet,
+                                            isExiting
+                                              ? exitingSet
+                                              : s.done
+                                              ? doneSet
+                                              : pendingSet,
+                                          ].join(" ")}
+                                        >
+                                          <div className="flex items-center gap-3">
+                                            <button
+                                              className={`inline-flex h-6 w-6 items-center justify-center rounded-full border transition ${
+                                                s.done
+                                                  ? "bg-brand-600 text-white border-brand-700"
+                                                  : "bg-[var(--color-base-card)] text-[var(--color-base-ink)] border-[var(--color-base-border)]"
+                                              }`}
+                                              onClick={() =>
+                                                toggleSetDone(
+                                                  w,
+                                                  exIdx,
+                                                  sIdx
+                                                )
+                                              }
+                                              aria-label="Toggle set done"
+                                              title="Toggle set done"
+                                            >
+                                              <FaCheck className="text-xs" />
+                                            </button>
+
+                                            <span className="text-sm">
+                                              {s.reps} reps
+                                              {typeof s.weight === "number"
+                                                ? ` • ${s.weight} kg`
+                                                : ""}
+                                            </span>
+                                          </div>
+
+                                          <button
+                                            className="text-red-600"
+                                            onClick={() =>
+                                              requestDeleteSet(
+                                                w,
+                                                exIdx,
+                                                sIdx
+                                              )
+                                            }
+                                            aria-label="Delete set"
+                                            title="Delete set"
+                                          >
+                                            <FaXmark />
+                                          </button>
+                                        </div>
+                                      </DeletableRow>
+                                    );
+                                  })}
+
+                                  {!(ex.sets ?? []).length && (
+                                    <p className="text-xs text-zinc-500">
+                                      No sets yet.
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </DeletableRow>
+                  );
+                })}
               </AnimatePresence>
             </div>
           </div>
         ))}
       </div>
 
-      {loading && <p className="text-sm text-zinc-500">Loading…</p>}
+      {isLoading && (
+        <p className="text-sm text-zinc-500">Loading…</p>
+      )}
 
-      {/* Create workout modal */}
+      {/* modal create workout */}
       <Modal
         open={open}
         closeAction={() => setOpen(false)}
         title="New workout"
         footer={
           <>
-            <button type="button" className="btn btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
-            <button className="btn btn-primary" type="submit" form="create-workout-form">Create</button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setOpen(false)}
+            >
+              Cancel
+            </button>
+            <button
+              className="btn btn-primary"
+              type="submit"
+              form="create-workout-form"
+            >
+              Create
+            </button>
           </>
         }
       >
-        <form id="create-workout-form" className="grid gap-3" onSubmit={createWorkout}>
+        <form
+          id="create-workout-form"
+          className="grid max-h-[70vh] gap-3 overflow-y-auto pr-2"
+          onSubmit={createWorkout}
+        >
           <label>
             <div className="label">Title</div>
-            <input className="input" value={title} onChange={(e)=>setTitle(e.target.value)} required />
-          </label>
-          <label>
-            <div className="label">Date</div>
-            <input className="input" type="date" value={date} onChange={(e)=>setDate(e.target.value)} required />
-          </label>
-          <label>
-            <div className="label">Notes (optional)</div>
-            <input className="input" value={notes} onChange={(e)=>setNotes(e.target.value)} />
+            <input
+              className="input"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+            />
           </label>
 
-          {/* Exercises builder */}
+          <label>
+            <div className="label">Date</div>
+            <input
+              className="input"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              required
+            />
+          </label>
+
+          <label>
+            <div className="label">Notes (optional)</div>
+            <input
+              className="input"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </label>
+
           <div className="mt-1 grid gap-3">
             <div className="flex items-center justify-between">
               <p className="label">Exercises</p>
-              <button type="button" className="btn btn-ghost" onClick={addExercise}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={addExercise}
+              >
                 <FaPlus className="mr-1" /> Add exercise
               </button>
             </div>
 
-            {exercises.map((ex, exIdx) => (
-              <div key={exIdx} className="rounded-xl border border-[var(--color-base-border)] bg-[var(--color-base-card)]">
+            {exercisesForm.map((ex, exIdx) => (
+              <div
+                key={exIdx}
+                className="rounded-xl border border-[var(--color-base-border)] bg-[var(--color-base-card)]"
+              >
                 <div className="flex items-center justify-between border-b border-[var(--color-base-border)] bg-[color-mix(in_ oklab, var(--color-base-card), var(--color-base-ink)_6%)] px-3 py-2">
                   <input
                     className="input !h-8 !py-1"
                     value={ex.name}
-                    onChange={(e)=> {
+                    onChange={(e) => {
                       const v = e.target.value;
-                      setExercises((xs)=> {
+                      setExercisesForm((xs) => {
                         const copy = structuredClone(xs) as Exercise[];
                         copy[exIdx].name = v;
                         return copy;
@@ -307,18 +575,25 @@ export default function WorkoutPanel() {
                     placeholder="Exercise name"
                     required
                   />
-                  <button type="button" className="text-red-600" onClick={()=>removeExercise(exIdx)}>
+                  <button
+                    type="button"
+                    className="text-red-600"
+                    onClick={() => removeExercise(exIdx)}
+                    aria-label="Remove exercise"
+                    title="Remove exercise"
+                  >
                     <FaTrash />
                   </button>
                 </div>
+
                 <div className="grid gap-2 p-3">
                   <input
                     className="input"
                     placeholder="Notes (optional)"
                     value={ex.notes || ""}
-                    onChange={(e)=> {
+                    onChange={(e) => {
                       const v = e.target.value;
-                      setExercises((xs)=> {
+                      setExercisesForm((xs) => {
                         const copy = structuredClone(xs) as Exercise[];
                         copy[exIdx].notes = v;
                         return copy;
@@ -328,13 +603,20 @@ export default function WorkoutPanel() {
 
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-zinc-600">Sets</p>
-                    <button type="button" className="btn btn-ghost" onClick={()=>addSet(exIdx)}>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      onClick={() => addSet(exIdx)}
+                    >
                       <FaPlus className="mr-1" /> Add set
                     </button>
                   </div>
 
                   {ex.sets.map((s, sIdx) => (
-                    <div key={sIdx} className="grid grid-cols-3 items-center gap-2">
+                    <div
+                      key={sIdx}
+                      className="grid grid-cols-3 items-center gap-2"
+                    >
                       <label className="grid">
                         <span className="text-xs text-zinc-600">Reps</span>
                         <input
@@ -342,37 +624,61 @@ export default function WorkoutPanel() {
                           type="number"
                           min={1}
                           value={s.reps}
-                          onChange={(e)=> {
+                          onChange={(e) => {
                             const n = Number(e.target.value);
-                            setExercises((xs)=> {
-                              const copy = structuredClone(xs) as Exercise[];
-                              copy[exIdx].sets[sIdx].reps = n > 0 ? n : 1;
+                            setExercisesForm((xs) => {
+                              const copy = structuredClone(
+                                xs
+                              ) as Exercise[];
+                              copy[exIdx].sets[sIdx].reps =
+                                n > 0 ? n : 1;
                               return copy;
                             });
                           }}
                           required
                         />
                       </label>
+
                       <label className="grid">
-                        <span className="text-xs text-zinc-600">Weight (kg)</span>
+                        <span className="text-xs text-zinc-600">
+                          Weight (kg)
+                        </span>
                         <input
                           className="input"
                           type="number"
                           min={0}
                           step={0.5}
-                          value={typeof s.weight === "number" ? s.weight : ""}
-                          onChange={(e)=> {
+                          value={
+                            typeof s.weight === "number"
+                              ? s.weight
+                              : ""
+                          }
+                          onChange={(e) => {
                             const v = e.target.value;
-                            setExercises((xs)=> {
-                              const copy = structuredClone(xs) as Exercise[];
-                              copy[exIdx].sets[sIdx].weight = v === "" ? undefined : Number(v);
+                            setExercisesForm((xs) => {
+                              const copy = structuredClone(
+                                xs
+                              ) as Exercise[];
+                              copy[exIdx].sets[sIdx].weight =
+                                v === ""
+                                  ? undefined
+                                  : Number(v);
                               return copy;
                             });
                           }}
                         />
                       </label>
+
                       <div className="flex items-end justify-end">
-                        <button type="button" className="text-red-600" onClick={()=>removeSetFromForm(exIdx, sIdx)}>
+                        <button
+                          type="button"
+                          className="text-red-600"
+                          onClick={() =>
+                            removeSetFromForm(exIdx, sIdx)
+                          }
+                          aria-label="Remove set"
+                          title="Remove set"
+                        >
                           <FaXmark />
                         </button>
                       </div>
@@ -380,7 +686,9 @@ export default function WorkoutPanel() {
                   ))}
 
                   {!ex.sets.length && (
-                    <p className="text-xs text-zinc-500">No sets yet.</p>
+                    <p className="text-xs text-zinc-500">
+                      No sets yet.
+                    </p>
                   )}
                 </div>
               </div>

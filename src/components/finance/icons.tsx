@@ -1,5 +1,5 @@
 import { IconType } from "react-icons";
-import { FaCartShopping, FaUtensils, FaGamepad, FaBus, FaHouse, FaMoneyBillWave } from "react-icons/fa6";
+import { FaPrescriptionBottleMedical, FaHeart, FaCreditCard, FaCode, FaCat, FaCarSide, FaBrain, FaCapsules, FaCartShopping, FaUtensils, FaGamepad, FaBus, FaHouse, FaMoneyBillWave } from "react-icons/fa6";
 import { MdSubscriptions } from "react-icons/md";
 
 export const ICONS: Record<string, IconType> = {
@@ -10,6 +10,14 @@ export const ICONS: Record<string, IconType> = {
   housing: FaHouse,
   income: FaMoneyBillWave,
   subs: MdSubscriptions,
+  brain: FaBrain,
+  capsules: FaCapsules,
+  carside: FaCarSide,
+  cat: FaCat,
+  code: FaCode,
+  card: FaCreditCard,
+  heart: FaHeart,
+  medicine: FaPrescriptionBottleMedical,
 };
 
 export const ICON_KEYS = Object.keys(ICONS);

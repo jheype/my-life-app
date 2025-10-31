@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import StreakWidget from "@/components/home/StreakWidget";
 import MonthlyInsights from "@/components/home/MonthlyInsights";
+import DashboardOverview from "@/components/DashboardOverview";
 
 export default async function Home() {
   const session = await getServerSession(authOptions);
@@ -24,7 +24,7 @@ export default async function Home() {
         </section>
 
       <section className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">
-          <StreakWidget />
+          <DashboardOverview/>
           <MonthlyInsights />
         </section>
 

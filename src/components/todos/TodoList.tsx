@@ -1,109 +1,141 @@
 "use client";
-import { useEffect, useMemo, useState, useTransition } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+
+import useSWR from "swr";
+import { useState, useTransition } from "react";
 import TodoItem from "./TodoItem";
 
+type Todo = { _id: string; title: string; done: boolean };
+
+const fetcher = (url: string) => fetch(url, { cache: "no-store" }).then(r => r.json());
+
 export default function TodoList() {
-  const [todos, setTodos] = useState<any[]>([]);
+  const { data: todos = [], isLoading, mutate } = useSWR<Todo[]>("/api/todos", fetcher, {
+    revalidateOnFocus: true,
+  });
+
   const [title, setTitle] = useState("");
-  const [pending, startTransition] = useTransition();
-
   const [exitingIds, setExitingIds] = useState<Set<string>>(new Set());
-
-  async function load() {
-    const res = await fetch("/api/todos", { cache: "no-store" });
-    if (res.ok) setTodos(await res.json());
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  async function addTodo(e: React.FormEvent) {
-    e.preventDefault();
-    const v = title.trim();
-    if (!v) return;
-    setTitle("");
-
-    const tempId = `temp-${Date.now()}`;
-    setTodos((t) => [{ _id: tempId, title: v, done: false }, ...t]);
-
-    const res = await fetch("/api/todos", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: v }),
-    });
-
-    if (res.ok) {
-      startTransition(load);
-    } else {
-      setTodos((t) => t.filter((x) => x._id !== tempId));
-    }
-  }
-
-  async function toggleAction(id: string) {
-    setTodos((t) => t.map((x) => (x._id === id ? { ...x, done: !x.done } : x)));
-    const res = await fetch(`/api/todos/${id}`, { method: "PATCH" });
-    if (!res.ok) startTransition(load);
-  }
+  const [isPending, startTransition] = useTransition();
 
   function requestDeleteAction(id: string) {
-    setExitingIds((prev) => new Set(prev).add(id));
+    setExitingIds(prev => new Set(prev).add(id));
   }
 
   async function onExitedAction(id: string) {
-    setTodos((t) => t.filter((x) => x._id !== id));
-    setExitingIds((prev) => {
-      const n = new Set(prev);
-      n.delete(id);
-      return n;
-    });
+    startTransition(async () => {
+      // otimista: tira da lista
+      await mutate(curr => (curr ?? []).filter(t => t._id !== id), { revalidate: false });
 
-    const res = await fetch(`/api/todos/${id}`, { method: "DELETE" });
-    if (!res.ok) startTransition(load);
+      // backend
+      await fetch(`/api/todos/${id}`, { method: "DELETE" });
+
+      // limpa estado de saída
+      setExitingIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+
+      // revalida
+      await mutate();
+    });
   }
 
-  const exitingMap = useMemo(() => {
-    const map: Record<string, true> = {};
-    exitingIds.forEach((id) => (map[id] = true));
-    return map;
-  }, [exitingIds]);
+  function toggleAction(id: string) {
+    const current = todos.find(t => t._id === id);
+    if (!current) return;
+    const nextDone = !current.done;
+
+    startTransition(async () => {
+      // otimista
+      await mutate(curr => (curr ?? []).map(t => (
+        t._id === id ? { ...t, done: nextDone } : t
+      )), { revalidate: false });
+
+      // backend
+      await fetch(`/api/todos/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ done: nextDone }),
+      });
+
+      // revalida
+      await mutate();
+    });
+  }
+
+  async function createAction(e: React.FormEvent) {
+    e.preventDefault();
+    const name = title.trim();
+    if (!name) return;
+
+    const tempId = "temp-" + Date.now();
+    const optimistic: Todo = { _id: tempId, title: name, done: false };
+
+    startTransition(async () => {
+      // otimista
+      await mutate([optimistic, ...todos], { revalidate: false, populateCache: true });
+      setTitle("");
+
+      // backend
+      const res = await fetch("/api/todos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: name }),
+      });
+
+      if (res.ok) {
+        const created: Todo = await res.json();
+
+        // costura: se backend não mandar done/title direito, fallback pro optimistic
+        const safeCreated: Todo = {
+          ...created,
+          title: created.title ?? optimistic.title,
+          done: typeof created.done === "boolean" ? created.done : optimistic.done,
+        };
+
+        await mutate(curr => {
+          const list = (curr ?? []).filter(t => t._id !== tempId);
+          return [safeCreated, ...list];
+        }, false);
+
+        await mutate();
+      } else {
+        await mutate(); // rollback
+      }
+    });
+  }
 
   return (
-    <div className="card p-4">
-      <form onSubmit={addTodo} className="mb-3 flex gap-2">
+    <div className="grid gap-4">
+      <form onSubmit={createAction} className="flex items-center gap-2">
         <input
           className="input"
-          placeholder="New task..."
-          aria-label="New task"
+          placeholder="Add a new task"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
-        <button className="btn btn-primary" type="submit" disabled={pending}>
-          Add
+        <button className="btn btn-primary" disabled={isPending} type="submit">
+          {isPending ? "Adding…" : "Add"}
         </button>
       </form>
 
-      <AnimatePresence initial={false} mode="popLayout">
-        <motion.ul layout className="grid gap-2" role="list">
-          {todos.map((t) => (
-            <TodoItem
-              key={t._id}
-              id={t._id}
-              title={t.title}
-              done={t.done}
-              exiting={!!exitingMap[t._id]}
-              toggleAction={toggleAction}
-              requestDeleteAction={requestDeleteAction}
-              onExitedAction={onExitedAction}
-            />
-          ))}
-        </motion.ul>
-      </AnimatePresence>
+      {isLoading && <p className="text-sm text-zinc-500">Loading…</p>}
 
-      {!todos.length && (
-        <p className="mt-2 text-sm text-zinc-500">No tasks yet. Add one above.</p>
-      )}
+      <ul className="grid gap-2">
+        {todos.map((t) => (
+          <TodoItem
+            key={t._id}
+            id={t._id}
+            title={t.title}
+            done={t.done}
+            exiting={exitingIds.has(t._id)}
+            toggleAction={toggleAction}
+            requestDeleteAction={requestDeleteAction}
+            onExitedAction={onExitedAction}
+          />
+        ))}
+      </ul>
     </div>
   );
 }

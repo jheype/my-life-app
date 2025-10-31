@@ -1,17 +1,12 @@
 @import "tailwindcss";
 
-/* =========================
-   THEME TOKENS (TAILWIND v4)
-   ========================= */
 @theme {
-  /* Base (light) */
-  --color-base-bg:    #F8F7F3;  /* off-white */
-  --color-base-card:  #FFFFFF;  /* surfaces */
-  --color-base-ink:   #0F172A;  /* slate-900 */
-  --color-base-muted: #64748B;  /* slate-500 */
-  --color-base-border:#E5E7EB;  /* zinc-200 */
+  --color-base-bg:    #F8F7F3; 
+  --color-base-card:  #FFFFFF; 
+  --color-base-ink:   #0F172A;  
+  --color-base-muted: #64748B; 
+  --color-base-border:#E5E7EB;  
 
-  /* Brand (emerald) */
   --color-brand-50:   #ECFDF5;
   --color-brand-100:  #D1FAE5;
   --color-brand-200:  #A7F3D0;
@@ -23,7 +18,6 @@
   --color-brand-800:  #065F46;
   --color-brand-900:  #064E3B;
 
-  /* Accent (danger) */
   --color-redbrand-50:  #f7786f;
   --color-redbrand-100: #e35b52;
   --color-redbrand-200: #d6483e;
@@ -41,26 +35,28 @@
   --container-app: 64rem;
 }
 
-/* =========================
-   DARK THEME OVERRIDES
-   (apenas variáveis)
-   ========================= */
 :root { color-scheme: light; }
 .dark {
   color-scheme: dark;
-
-  /* petróleo escuro + alto contraste suave */
-  --color-base-bg:     #0C1110;   /* bg */
-  --color-base-card:   #0F1413;   /* surfaces */
-  --color-base-ink:    #E5E7EB;   /* texto */
-  --color-base-muted:  #9CA3AF;   /* muteds */
-  --color-base-border: #1F2937;   /* linhas */
+  --color-base-bg:     #0C1110;   
+  --color-base-card:   #0F1413;   
+  --color-base-ink:    #E5E7EB;   
+  --color-base-muted:  #9CA3AF;   
+  --color-base-border: #1F2937;   
 }
 
-/* =========================
-   BASE
-   ========================= */
-html, body { height: 100%; }
+
+html {
+  transition: background-color .25s, color .25s;
+}
+body, .card, .btn, .input {
+  transition: background-color .25s, color .25s, border-color .25s, box-shadow .25s;
+}
+
+
+html, body { 
+  height: 100%; 
+}
 
 body {
   @apply antialiased;
@@ -68,14 +64,10 @@ body {
   color: var(--color-base-ink);
 }
 
-/* =========================
-   UTILITIES
-   ========================= */
 @utility shadow-soft { box-shadow: var(--shadow-soft); }
 
 .label { @apply mb-1 text-sm; color: var(--color-base-muted); }
 
-/* Botões */
 .btn {
   @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 font-medium transition;
   background-color: transparent;
@@ -84,10 +76,10 @@ body {
 }
 
 .btn-primary {
-  background-color: var(--color-brand-600);
-  color: #fff;
-  border-color: var(--color-brand-700);
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 font-medium transition
+  bg-brand-600 text-white hover:bg-brand-700 active:scale-[0.98] active:brightness-95;
 }
+
 .btn-primary:hover {
   background-color: var(--color-brand-700);
 }
@@ -105,11 +97,9 @@ body {
   border-color: var(--color-base-border);
 }
 .btn-ghost:hover {
-  /* leve elevação da surface no hover, funciona nos 2 temas */
   background-color: color-mix(in oklab, var(--color-base-card), var(--color-base-ink) 6%);
 }
 
-/* Cards */
 .card {
   border-radius: var(--radius-xl);
   background-color: var(--color-base-card);
@@ -117,11 +107,10 @@ body {
   box-shadow: var(--shadow-soft);
 }
 
-/* Inputs */
 .input {
   width: 100%;
   border-radius: var(--radius-xl);
-  padding: 0.5rem 0.75rem; /* ~py-2 px-3 */
+  padding: 0.5rem 0.75rem; 
   outline: none;
 
   background-color: var(--color-base-card);
@@ -131,16 +120,10 @@ body {
 .input::placeholder { color: var(--color-base-muted); }
 .input:focus { box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-brand-300), white 30%); }
 
-/* =========================
-   HOTFIX (para JSX legados)
-   - Se você usou bg-white/border-zinc-200/text-zinc-600 etc.,
-     isso garante que respeitem o tema escuro sem refatorar tudo agora.
-   ========================= */
 .dark .bg-white        { background-color: var(--color-base-card) !important; }
 .dark .border-zinc-200 { border-color: var(--color-base-border) !important; }
 .dark .text-zinc-600   { color: var(--color-base-muted) !important; }
 .dark .text-zinc-700   { color: var(--color-base-ink) !important; }
 .dark .bg-zinc-50      { background-color: color-mix(in oklab, var(--color-base-card), var(--color-base-ink) 4%) !important; }
 
-/* Container helper (se você usa) */
 .max-w-app { max-width: var(--container-app); }
