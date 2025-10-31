@@ -9,13 +9,24 @@ function cleanId(raw: unknown) {
   return String(raw).trim().replace(/^"|"$/g, "");
 }
 
+function getUserIdFromSession(session: any) {
+  return (
+    session?.userId ||
+    session?.user?.id ||
+    session?.user?.userId ||
+    session?.user?.uid ||
+    null
+  );
+}
+
 export async function DELETE(
   _req: Request,
-  ctx: { params: Promise<{ id: string }> }
+  ctx: { params: Promise<{ id: string }> } 
 ) {
   try {
     const session = await getServerSession(authOptions);
-    const userId = (session as any)?.userId;
+    const userId = getUserIdFromSession(session);
+
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -26,7 +37,9 @@ export async function DELETE(
     if (!id) {
       return NextResponse.json({ error: "Missing id" }, { status: 400 });
     }
+
     await dbConnect();
+
     const result = await Workout.deleteOne({ _id: id, userId });
 
     if (result.deletedCount === 0) {

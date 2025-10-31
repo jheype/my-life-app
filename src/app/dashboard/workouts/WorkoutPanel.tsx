@@ -17,7 +17,7 @@ type SetItem = { reps: number; weight?: number; done?: boolean };
 type Exercise = { name: string; notes?: string; sets: SetItem[] };
 type Workout = {
   _id: string;
-  date: string; // "YYYY-MM-DD"
+  date: string; 
   title: string;
   notes?: string;
   exercises?: Exercise[];
@@ -31,8 +31,19 @@ function makeSetKey(workoutId: string, exIdx: number, setIdx: number) {
   return `${workoutId}:${exIdx}:${setIdx}`;
 }
 
-const fetcher = (url: string) =>
-  fetch(url, { cache: "no-store" }).then((r) => r.json());
+const fetcher = async (url: string) => {
+  const r = await fetch(url, { cache: "no-store" });
+  let data: any = null;
+  try {
+    data = await r.json();
+  } catch {
+    data = null;
+  }
+  if (!r.ok && !Array.isArray(data)) {
+    throw new Error(`Request failed ${r.status}`);
+  }
+  return data;
+};
 
 export default function WorkoutPanel() {
   const [month, setMonth] = useState(formatMonthKey(new Date()));
@@ -56,37 +67,28 @@ export default function WorkoutPanel() {
     },
   ]);
 
-  // animações / estado visual
   const [exitingWorkoutIds, setExitingWorkoutIds] = useState<Set<string>>(
     new Set()
   );
   const [exitingSets, setExitingSets] = useState<Record<string, boolean>>({});
-
-  // evita double submit de criação
   const creatingRef = useRef(false);
-
-  // marca ids que já foram deletados no servidor
   const deletedOnce = useRef<Set<string>>(new Set());
-
-  // SWR data
   const { data: workoutsData, isLoading } = useSWR<Workout[]>(
     `/api/workouts?month=${month}`,
     fetcher
   );
   const workouts = workoutsData ?? [];
 
-  // agrupa por dia
   const byDay = useMemo(() => {
     const map = new Map<string, Workout[]>();
     for (const w of workouts) {
-      const key = w.date; // já vem "YYYY-MM-DD"
+      const key = w.date; 
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(w);
     }
     return Array.from(map.entries()).sort((a, b) => (a[0] < b[0] ? 1 : -1));
   }, [workouts]);
 
-  // helpers form
   function resetForm() {
     setDate(new Date().toISOString().slice(0, 10));
     setTitle("Push day");
@@ -135,7 +137,6 @@ export default function WorkoutPanel() {
     });
   }
 
-  // CREATE workout
   async function createWorkout(e: React.FormEvent) {
     e.preventDefault();
     if (creatingRef.current) return;
@@ -156,6 +157,7 @@ export default function WorkoutPanel() {
 
     if (!res.ok) {
       creatingRef.current = false;
+      console.error("Failed to create workout", res.status);
       return;
     }
 
@@ -166,19 +168,15 @@ export default function WorkoutPanel() {
     mutate(`/api/workouts?month=${month}`);
   }
 
-  // pede pra deletar (anima imediatamente + já manda DELETE)
   async function handleImmediateDelete(workoutId: string) {
-    // se já deletamos no servidor, não faz nada
     if (deletedOnce.current.has(workoutId)) return;
 
-    // marca visualmente como "exiting" para animar vermelho + slide
     setExitingWorkoutIds((prev) => {
       const next = new Set(prev);
       next.add(workoutId);
       return next;
     });
 
-    // manda DELETE no servidor já
     const res = await fetch(`/api/workouts/${workoutId}`, {
       method: "DELETE",
     });
@@ -189,13 +187,10 @@ export default function WorkoutPanel() {
 
     deletedOnce.current.add(workoutId);
 
-    // refaz o fetch global pra sumir da lista
     mutate(`/api/workouts?month=${month}`);
   }
 
-  // callback chamado quando a animação termina
   function finalizeDeleteWorkout(workoutId: string) {
-    // só limpa o estado local de animação
     setExitingWorkoutIds((prev) => {
       const next = new Set(prev);
       next.delete(workoutId);
@@ -203,11 +198,9 @@ export default function WorkoutPanel() {
     });
   }
 
-  // ===== SETS =====
   function requestDeleteSet(workout: Workout, exIdx: number, setIdx: number) {
     const key = makeSetKey(workout._id, exIdx, setIdx);
     setExitingSets((prev) => ({ ...prev, [key]: true }));
-    // remoção de set só persiste no finalizeDeleteSet, porque precisa PATCH
   }
 
   async function finalizeDeleteSet(
@@ -215,25 +208,45 @@ export default function WorkoutPanel() {
     exIdx: number,
     setIdx: number
   ) {
-    // clona os exercises atuais desse workout
-    const currentExercises = structuredClone(
+    const snapshotExercises = structuredClone(
       workout.exercises ?? []
     ) as Exercise[];
 
-    // remove set local
-    currentExercises[exIdx].sets.splice(setIdx, 1);
+    if (!snapshotExercises.length) {
+      console.warn("Abort PATCH: no exercises snapshot, avoiding wipe.");
+      const kAbort = makeSetKey(workout._id, exIdx, setIdx);
+      setExitingSets((prev) => {
+        const { [kAbort]: _, ...rest } = prev;
+        return rest;
+      });
+      mutate(`/api/workouts?month=${month}`);
+      return;
+    }
 
-    // PATCH no servidor para salvar nova lista de sets
-    await fetch(`/api/workouts/update`, {
+    if (snapshotExercises[exIdx]) {
+      snapshotExercises[exIdx].sets.splice(setIdx, 1);
+    }
+
+    const res = await fetch(`/api/workouts/update`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         id: workout._id,
-        exercises: currentExercises,
+        exercises: snapshotExercises,
       }),
     });
 
-    // limpa flag de animação daquele set
+    if (!res.ok) {
+      console.error("PATCH (remove set) failed", res.status);
+      const kErr = makeSetKey(workout._id, exIdx, setIdx);
+      setExitingSets((prev) => {
+        const { [kErr]: _, ...rest } = prev;
+        return rest;
+      });
+      mutate(`/api/workouts?month=${month}`);
+      return;
+    }
+
     const k = makeSetKey(workout._id, exIdx, setIdx);
     setExitingSets((prev) => {
       const { [k]: _, ...rest } = prev;
@@ -248,28 +261,45 @@ export default function WorkoutPanel() {
     exIdx: number,
     setIdx: number
   ) {
-    const currentExercises = structuredClone(
+    const snapshotExercises = structuredClone(
       workout.exercises ?? []
     ) as Exercise[];
 
-    currentExercises[exIdx].sets[setIdx].done =
-      !currentExercises[exIdx].sets[setIdx].done;
+    if (!snapshotExercises.length) {
+      console.warn("Abort PATCH: no exercises snapshot, avoiding wipe.");
+      return;
+    }
 
-    await fetch(`/api/workouts/update`, {
+    if (
+      !snapshotExercises[exIdx] ||
+      !snapshotExercises[exIdx].sets[setIdx]
+    ) {
+      console.warn("Abort PATCH: invalid index for toggle");
+      return;
+    }
+
+    snapshotExercises[exIdx].sets[setIdx].done =
+      !snapshotExercises[exIdx].sets[setIdx].done;
+
+    const res = await fetch(`/api/workouts/update`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         id: workout._id,
-        exercises: currentExercises,
+        exercises: snapshotExercises,
       }),
     });
+
+    if (!res.ok) {
+      console.error("PATCH (toggle done) failed", res.status);
+      return;
+    }
 
     mutate(`/api/workouts?month=${month}`);
   }
 
   return (
     <div className="grid gap-6">
-      {/* top actions */}
       <div className="flex flex-wrap items-center gap-2">
         <button className="btn btn-primary" onClick={() => setOpen(true)}>
           New workout
@@ -288,7 +318,6 @@ export default function WorkoutPanel() {
         </div>
       </div>
 
-      {/* grouped list */}
       <div className="grid gap-4">
         {byDay.length === 0 && !isLoading && (
           <p className="text-sm text-zinc-500">No workouts for this month.</p>
@@ -319,7 +348,6 @@ export default function WorkoutPanel() {
                             : "border-[var(--color-base-border)] bg-[var(--color-base-card)] text-[var(--color-base-ink)]",
                         ].join(" ")}
                       >
-                        {/* header workout */}
                         <div className="mb-2 flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <FaDumbbell />
@@ -333,7 +361,6 @@ export default function WorkoutPanel() {
                             </div>
                           </div>
 
-                          {/* botão de lixeira */}
                           <button
                             className="text-red-600"
                             onClick={() => handleImmediateDelete(w._id)}
@@ -344,14 +371,12 @@ export default function WorkoutPanel() {
                           </button>
                         </div>
 
-                        {/* exercícios */}
                         <div className="grid gap-3">
                           {(w.exercises ?? []).map((ex, exIdx) => (
                             <div
                               key={exIdx}
                               className="rounded-lg border border-[var(--color-base-border)]"
                             >
-                              {/* header do exercício */}
                               <div className="flex flex-col gap-1 border-b border-[var(--color-base-border)] bg-[color-mix(in_ oklab, var(--color-base-card), var(--color-base-ink)_6%)] px-3 py-2 md:flex-row md:items-center md:justify-between">
                                 <p className="font-medium">{ex.name}</p>
                                 {ex.notes && (
@@ -361,7 +386,6 @@ export default function WorkoutPanel() {
                                 )}
                               </div>
 
-                              {/* sets */}
                               <div className="p-3">
                                 <div className="grid gap-2">
                                   {(ex.sets ?? []).map((s, sIdx) => {
@@ -484,7 +508,6 @@ export default function WorkoutPanel() {
         <p className="text-sm text-zinc-500">Loading…</p>
       )}
 
-      {/* modal create workout */}
       <Modal
         open={open}
         closeAction={() => setOpen(false)}

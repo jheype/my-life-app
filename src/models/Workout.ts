@@ -1,36 +1,45 @@
-import { Schema, model, models, Types } from "mongoose";
+import mongoose, { Schema, Document, models, model } from "mongoose";
 
-const WorkoutSetSchema = new Schema(
+export interface IWorkout extends Document {
+  userId: string;
+  date: Date;
+  title: string;
+  notes?: string;
+  exercises?: {
+    name: string;
+    notes?: string;
+    sets: { reps: number; weight?: number; done?: boolean }[];
+  }[];
+}
+
+const SetSchema = new Schema(
   {
     reps: { type: Number, required: true },
-    weight: { type: Number, default: undefined },
+    weight: { type: Number },
     done: { type: Boolean, default: false },
   },
   { _id: false }
 );
 
-const WorkoutExerciseSchema = new Schema(
+const ExerciseSchema = new Schema(
   {
     name: { type: String, required: true },
-    notes: { type: String, default: "" },
-    sets: { type: [WorkoutSetSchema], default: [] },
+    notes: { type: String },
+    sets: { type: [SetSchema], default: [] },
   },
   { _id: false }
 );
 
-const WorkoutSchema = new Schema(
+const workoutSchema = new Schema(
   {
-    userId: { type: Types.ObjectId, ref: "User", required: true },
-
-    // guarda como Date no banco (igual Meal)
+    userId: { type: String, required: true },
     date: { type: Date, required: true },
-
     title: { type: String, required: true },
-    notes: { type: String, default: "" },
-
-    exercises: { type: [WorkoutExerciseSchema], default: [] },
+    notes: { type: String },
+    exercises: { type: [ExerciseSchema], default: [] },
   },
   { timestamps: true }
 );
 
-export const Workout = models.Workout || model("Workout", WorkoutSchema);
+export const Workout =
+  models.Workout || model<IWorkout>("Workout", workoutSchema);

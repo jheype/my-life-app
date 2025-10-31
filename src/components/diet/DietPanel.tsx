@@ -34,26 +34,34 @@ type MealItem = {
 
 type Meal = {
   _id: string;
-  date: string; // "YYYY-MM-DD"
+  date: string; 
   type: "Breakfast" | "Lunch" | "Dinner" | "Snack";
   notes?: string;
   items: MealItem[];
 };
 
-const fetcher = (url: string) =>
-  fetch(url, { cache: "no-store" }).then((r) => r.json());
+const fetcher = async (url: string) => {
+  const r = await fetch(url, { cache: "no-store" });
+  let data: any = null;
+  try {
+    data = await r.json();
+  } catch {
+    data = null;
+  }
+  if (!r.ok && !Array.isArray(data)) {
+    throw new Error(`Request failed ${r.status}`);
+  }
+  return data;
+};
 
-// yyyy-mm
 function formatMonthKey(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-// yyyy-mm-dd
 function formatDateKey(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
-// paleta / ícone pra cada tipo de refeição
 const typeStyles: Record<
   Meal["type"],
   { card: string; icon: JSX.Element; chip: string }
@@ -89,12 +97,9 @@ const typeStyles: Record<
 };
 
 export default function DietPanel() {
-  // mês que está carregado do backend
   const [month, setMonth] = useState(formatMonthKey(new Date()));
-  // dia que queremos analisar no dashboard
   const [selectedDate, setSelectedDate] = useState(formatDateKey(new Date()));
 
-  // SWR principal (busca o mês inteiro)
   const {
     data: mealsData,
     isLoading,
@@ -105,10 +110,8 @@ export default function DietPanel() {
 
   const meals = mealsData ?? [];
 
-  // modal create meal
   const [open, setOpen] = useState(false);
 
-  // form state para criar refeição
   const [date, setDate] = useState<string>(() => formatDateKey(new Date()));
   const [type, setType] = useState<Meal["type"]>("Breakfast");
   const [notes, setNotes] = useState("");
@@ -124,7 +127,6 @@ export default function DietPanel() {
     },
   ]);
 
-  // ids que estão animando pra sumir
   const [exitingMealIds, setExitingMealIds] = useState<Set<string>>(
     new Set()
   );
@@ -147,7 +149,6 @@ export default function DietPanel() {
     ]);
   }
 
-  // CREATE meal
   async function createMeal(e: React.FormEvent) {
     e.preventDefault();
     if (!items.length) {
@@ -172,27 +173,19 @@ export default function DietPanel() {
       console.error("Failed to create meal", res.status);
       return;
     }
-
     setOpen(false);
     resetForm();
-
-    // se eu criei refeição pro dia X, eu quero automaticamente
-    // puxar o dashboard pra aquele mesmo dia
     setSelectedDate(date);
-
-    mutate(); // refetch lista atualizada
+    mutate(); 
   }
 
-  // DELETE meal (optimistic)
   async function handleImmediateDelete(mealId: string) {
-    // 1. marca como saindo pra dar o efeito vermelho + slide
     setExitingMealIds((prev) => {
       const next = new Set(prev);
       next.add(mealId);
       return next;
     });
 
-    // 2. tira imediatamente do cache SWR (optimistic UI)
     mutate(
       (current) => {
         if (!current) return current;
@@ -201,7 +194,6 @@ export default function DietPanel() {
       { revalidate: false }
     );
 
-    // 3. manda DELETE pro servidor
     const res = await fetch(`/api/diet/meals/${mealId}`, {
       method: "DELETE",
     });
@@ -210,11 +202,9 @@ export default function DietPanel() {
       console.error("Failed to delete meal", mealId, res.status);
     }
 
-    // 4. refetch do servidor pra garantir estado final correto
     mutate();
   }
 
-  // quando a animação termina
   function finalizeDeleteMeal(mealId: string) {
     setExitingMealIds((prev) => {
       const next = new Set(prev);
@@ -223,7 +213,6 @@ export default function DietPanel() {
     });
   }
 
-  // ===== itens do formulário do modal ======
   function addItem() {
     setItems((xs) => [
       ...xs,
@@ -242,26 +231,22 @@ export default function DietPanel() {
     setItems((xs) => xs.filter((_, i) => i !== idx));
   }
 
-  // ===== agrupar tudo por dia (histórico mensal) =====
   const byDay = useMemo(() => {
     const map = new Map<string, Meal[]>();
     for (const m of meals) {
-      const key = m.date; // já vem "YYYY-MM-DD"
+      const key = m.date; 
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(m);
     }
-    // ordenar data desc
     return Array.from(map.entries()).sort((a, b) =>
       a[0] < b[0] ? 1 : -1
     );
   }, [meals]);
 
-  // ===== refeições APENAS do dia selecionado =====
   const mealsOfSelectedDay = useMemo(() => {
     return meals.filter((m) => m.date === selectedDate);
   }, [meals, selectedDate]);
 
-  // ===== totais do DIA selecionado =====
   const dayTotals = useMemo(() => {
     let calories = 0,
       protein = 0,
@@ -278,7 +263,6 @@ export default function DietPanel() {
     return { calories, protein, carbs, fat };
   }, [mealsOfSelectedDay]);
 
-  // gráfico pizza também baseado só no dia
   const macrosData = useMemo(
     () => [
       {
@@ -300,7 +284,6 @@ export default function DietPanel() {
     [dayTotals]
   );
 
-  // totais por refeição
   function mealTotals(m: Meal) {
     return m.items.reduce(
       (acc, it) => ({
@@ -315,10 +298,7 @@ export default function DietPanel() {
 
   return (
     <div className="relative grid gap-6">
-      {/* gradiente decorativo topo */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/40 to-transparent dark:from-white/5"></div>
-
-      {/* Header actions */}
       <div className="flex flex-wrap items-center gap-2">
         <button
           className="btn btn-primary cursor-pointer"
@@ -327,7 +307,6 @@ export default function DietPanel() {
           New meal
         </button>
 
-        {/* seletor de DIA: controla o dashboard superior */}
         <div className="ml-auto flex flex-wrap items-center gap-3">
           <label className="label">Day</label>
           <input
@@ -337,7 +316,6 @@ export default function DietPanel() {
             onChange={(e) => setSelectedDate(e.target.value)}
           />
 
-          {/* seletor de MÊS: controla o fetch */}
           <label className="label">Month</label>
           <input
             type="month"
@@ -345,8 +323,6 @@ export default function DietPanel() {
             value={month}
             onChange={(e) => {
               setMonth(e.target.value);
-              // se o usuário troca mês, vamos também ajustar selectedDate
-              // pra primeira data desse novo mês (qualquer heurística simples)
               const [y, m] = e.target.value.split("-");
               if (y && m) {
                 setSelectedDate(`${y}-${m}-01`);
@@ -356,7 +332,6 @@ export default function DietPanel() {
         </div>
       </div>
 
-      {/* KPI cards do DIA selecionado */}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
         <div className="card p-4">
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
@@ -392,7 +367,6 @@ export default function DietPanel() {
         </div>
       </div>
 
-      {/* Pie chart do DIA */}
       <div className="card p-4">
         <h3 className="mb-1 font-semibold text-zinc-900 dark:text-white">
           Macro calories distribution
@@ -421,7 +395,6 @@ export default function DietPanel() {
         </div>
       </div>
 
-      {/* Histórico completo do mês (todas as datas) */}
       <div className="grid gap-4">
         {byDay.length === 0 && !isLoading && (
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
@@ -434,7 +407,6 @@ export default function DietPanel() {
             <p className="mb-2 flex items-baseline gap-2 text-sm font-medium text-zinc-600 dark:text-zinc-300">
               <span>{day}</span>
 
-              {/* botão para "ver esse dia" nos KPIs */}
               <button
                 className="rounded-md border border-zinc-300 bg-white px-2 py-[2px] text-[10px] font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 active:scale-[0.98] dark:border-white/10 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
                 onClick={() => setSelectedDate(day)}
@@ -469,7 +441,6 @@ export default function DietPanel() {
                             : "",
                         ].join(" ")}
                       >
-                        {/* header */}
                         <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
                           <div className="flex items-center gap-2 text-sm font-semibold">
                             <span className="flex h-7 min-w-[2rem] items-center justify-center rounded-full px-2 text-xs font-medium shadow-sm ring-1 ring-black/5 dark:ring-white/10">
@@ -510,14 +481,12 @@ export default function DietPanel() {
                           </div>
                         </div>
 
-                        {/* notes */}
                         {m.notes && (
                           <p className="mb-2 text-sm italic text-zinc-700 dark:text-zinc-300">
                             {m.notes}
                           </p>
                         )}
 
-                        {/* tabela itens */}
                         <div className="overflow-x-auto">
                           <table className="w-full min-w-[560px] text-left text-sm">
                             <thead>
@@ -570,8 +539,6 @@ export default function DietPanel() {
                               ))}
                             </tbody>
                           </table>
-
-                          {/* total por refeição */}
                           <p className="mt-2 text-right text-xs font-medium text-zinc-800 dark:text-zinc-200">
                             Total:{" "}
                             <span className="font-semibold">
@@ -595,7 +562,6 @@ export default function DietPanel() {
         </p>
       )}
 
-      {/* Modal create meal */}
       <Modal
         open={open}
         closeAction={() => setOpen(false)}
@@ -662,7 +628,6 @@ export default function DietPanel() {
             </label>
           </div>
 
-          {/* Preview blocão */}
           <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-white/10 dark:bg-zinc-900">
             <p className="mb-2 text-sm text-zinc-500 dark:text-zinc-400">
               Preview
@@ -698,8 +663,6 @@ export default function DietPanel() {
               );
             })()}
           </div>
-
-          {/* Items builder */}
           <div className="mt-1 grid gap-3">
             <div className="flex items-center justify-between">
               <p className="label">Items</p>
@@ -724,9 +687,7 @@ export default function DietPanel() {
                     onChange={(e) => {
                       const v = e.target.value;
                       setItems((xs) => {
-                        const copy = structuredClone(
-                          xs
-                        ) as MealItem[];
+                        const copy = structuredClone(xs) as MealItem[];
                         copy[idx].name = v;
                         return copy;
                       });
@@ -756,9 +717,7 @@ export default function DietPanel() {
                       onChange={(e) => {
                         const v = e.target.value;
                         setItems((xs) => {
-                          const copy = structuredClone(
-                            xs
-                          ) as MealItem[];
+                          const copy = structuredClone(xs) as MealItem[];
                           copy[idx].qty =
                             v === "" ? undefined : Number(v);
                           return copy;
@@ -777,9 +736,7 @@ export default function DietPanel() {
                       onChange={(e) => {
                         const v = e.target.value;
                         setItems((xs) => {
-                          const copy = structuredClone(
-                            xs
-                          ) as MealItem[];
+                          const copy = structuredClone(xs) as MealItem[];
                           copy[idx].unit = v;
                           return copy;
                         });
@@ -799,9 +756,7 @@ export default function DietPanel() {
                       onChange={(e) => {
                         const n = Number(e.target.value);
                         setItems((xs) => {
-                          const copy = structuredClone(
-                            xs
-                          ) as MealItem[];
+                          const copy = structuredClone(xs) as MealItem[];
                           copy[idx].calories =
                             isNaN(n) || n < 0 ? 0 : n;
                           return copy;
@@ -823,9 +778,7 @@ export default function DietPanel() {
                       onChange={(e) => {
                         const n = Number(e.target.value);
                         setItems((xs) => {
-                          const copy = structuredClone(
-                            xs
-                          ) as MealItem[];
+                          const copy = structuredClone(xs) as MealItem[];
                           copy[idx].protein =
                             isNaN(n) || n < 0 ? 0 : n;
                           return copy;
@@ -846,9 +799,7 @@ export default function DietPanel() {
                       onChange={(e) => {
                         const n = Number(e.target.value);
                         setItems((xs) => {
-                          const copy = structuredClone(
-                            xs
-                          ) as MealItem[];
+                          const copy = structuredClone(xs) as MealItem[];
                           copy[idx].carbs =
                             isNaN(n) || n < 0 ? 0 : n;
                           return copy;
@@ -869,9 +820,7 @@ export default function DietPanel() {
                       onChange={(e) => {
                         const n = Number(e.target.value);
                         setItems((xs) => {
-                          const copy = structuredClone(
-                            xs
-                          ) as MealItem[];
+                          const copy = structuredClone(xs) as MealItem[];
                           copy[idx].fat =
                             isNaN(n) || n < 0 ? 0 : n;
                           return copy;
