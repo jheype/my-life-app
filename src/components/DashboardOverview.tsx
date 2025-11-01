@@ -28,6 +28,7 @@ export default function DashboardOverview() {
   useEffect(() => {
     async function load() {
       setLoading(true);
+
       const now = new Date();
       const monthKey = formatMonthKey(now);
 
@@ -44,7 +45,9 @@ export default function DashboardOverview() {
       const expensesThisMonth = 0;
 
       const datesWithWorkout = new Set(
-        workouts.map((w) => new Date(w.date).toISOString().slice(0, 10))
+        workouts.map((w) =>
+          new Date(w.date).toISOString().slice(0, 10)
+        )
       );
 
       let streakCount = 0;
@@ -59,9 +62,9 @@ export default function DashboardOverview() {
         }
       }
 
-
       const today = new Date();
-      const weekday = (today.getDay() + 6) % 7; 
+      const weekday = (today.getDay() + 6) % 7;
+
       const weekActive: boolean[] = Array(7).fill(false);
       for (let i = 0; i < 7; i++) {
         const d = new Date();
@@ -76,8 +79,8 @@ export default function DashboardOverview() {
         streak: streakCount,
         weekActive,
         workoutsThisMonth: workouts.length,
-        tasksDoneThisMonth: tasksDoneThisMonth,
-        expensesThisMonth: expensesThisMonth,
+        tasksDoneThisMonth,
+        expensesThisMonth,
       });
 
       setLoading(false);
@@ -102,7 +105,7 @@ export default function DashboardOverview() {
               ? "var(--color-brand-500)"
               : "var(--color-base-card)",
             color: active
-              ? "white"
+              ? "#FFFFFF" 
               : "var(--color-base-ink)",
             borderColor: active
               ? "var(--color-brand-600)"
@@ -119,10 +122,12 @@ export default function DashboardOverview() {
 
   return (
     <div className="grid gap-6">
-      {/* STREAK CARD */}
-      <div className="card p-4 flex flex-col gap-4">
+      <div className="card flex flex-col gap-4 p-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-base font-semibold">
+          <div
+            className="flex items-center gap-2 text-base font-semibold"
+            style={{ color: "var(--color-base-ink)" }}
+          >
             <FaFire className="text-brand-500" />
             <span>Streak</span>
           </div>
@@ -131,7 +136,11 @@ export default function DashboardOverview() {
             <motion.span
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="text-2xl font-bold text-brand-600 dark:text-brand-400"
+              className="text-2xl font-bold"
+              style={{
+                color:
+                  "var(--color-brand-600)",
+              }}
             >
               {insights.streak}d
             </motion.span>
@@ -142,21 +151,32 @@ export default function DashboardOverview() {
           {circles}
         </div>
 
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Consecutive active days. Completing at least one workout keeps the flame alive.
+        <p
+          className="text-xs"
+          style={{ color: "var(--color-base-muted)" }}
+        >
+          Consecutive active days. Completing at least one workout
+          keeps the flame alive.
         </p>
       </div>
+
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <motion.div
           initial={{ y: 8, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="card p-4 flex flex-col gap-1"
+          className="card flex flex-col gap-1 p-4"
         >
-          <div className="flex items-center gap-2 text-sm font-medium text-zinc-600 dark:text-zinc-400">
+          <div
+            className="flex items-center gap-2 text-sm font-medium"
+            style={{ color: "var(--color-base-muted)" }}
+          >
             <FaDumbbell />
             <span>Workouts this month</span>
           </div>
-          <div className="text-2xl font-semibold text-[var(--color-base-ink)] dark:text-white">
+          <div
+            className="text-2xl font-semibold"
+            style={{ color: "var(--color-base-ink)" }}
+          >
             {insights?.workoutsThisMonth ?? 0}
           </div>
         </motion.div>
@@ -165,13 +185,19 @@ export default function DashboardOverview() {
           initial={{ y: 8, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.05 }}
-          className="card p-4 flex flex-col gap-1"
+          className="card flex flex-col gap-1 p-4"
         >
-          <div className="flex items-center gap-2 text-sm font-medium text-zinc-600 dark:text-zinc-400">
+          <div
+            className="flex items-center gap-2 text-sm font-medium"
+            style={{ color: "var(--color-base-muted)" }}
+          >
             <FaListCheck />
             <span>Tasks done (soon)</span>
           </div>
-          <div className="text-2xl font-semibold text-[var(--color-base-ink)] dark:text-white">
+          <div
+            className="text-2xl font-semibold"
+            style={{ color: "var(--color-base-ink)" }}
+          >
             {insights?.tasksDoneThisMonth ?? 0}
           </div>
         </motion.div>
@@ -180,14 +206,21 @@ export default function DashboardOverview() {
           initial={{ y: 8, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.1 }}
-          className="card p-4 flex flex-col gap-1"
+          className="card flex flex-col gap-1 p-4"
         >
-          <div className="flex items-center gap-2 text-sm font-medium text-zinc-600 dark:text-zinc-400">
+          <div
+            className="flex items-center gap-2 text-sm font-medium"
+            style={{ color: "var(--color-base-muted)" }}
+          >
             <FaWallet />
             <span>Spent this month</span>
           </div>
-          <div className="text-2xl font-semibold text-[var(--color-base-ink)] dark:text-white">
-            ${insights?.expensesThisMonth?.toFixed
+          <div
+            className="text-2xl font-semibold"
+            style={{ color: "var(--color-base-ink)" }}
+          >
+            $
+            {insights?.expensesThisMonth?.toFixed
               ? insights.expensesThisMonth.toFixed(2)
               : "0.00"}
           </div>

@@ -149,6 +149,7 @@ export default function DietPanel() {
     ]);
   }
 
+  // criar refeição
   async function createMeal(e: React.FormEvent) {
     e.preventDefault();
     if (!items.length) {
@@ -173,6 +174,7 @@ export default function DietPanel() {
       console.error("Failed to create meal", res.status);
       return;
     }
+
     setOpen(false);
     resetForm();
     setSelectedDate(date);
@@ -201,7 +203,6 @@ export default function DietPanel() {
     if (!res.ok && res.status !== 404) {
       console.error("Failed to delete meal", mealId, res.status);
     }
-
     mutate();
   }
 
@@ -227,6 +228,7 @@ export default function DietPanel() {
       },
     ]);
   }
+
   function removeItem(idx: number) {
     setItems((xs) => xs.filter((_, i) => i !== idx));
   }
@@ -234,7 +236,7 @@ export default function DietPanel() {
   const byDay = useMemo(() => {
     const map = new Map<string, Meal[]>();
     for (const m of meals) {
-      const key = m.date; 
+      const key = m.date;
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(m);
     }
@@ -334,44 +336,77 @@ export default function DietPanel() {
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
         <div className="card p-4">
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          <p
+            className="text-sm"
+            style={{ color: "var(--color-base-muted)" }}
+          >
             Calories ({selectedDate})
           </p>
-          <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-white">
+          <p
+            className="mt-1 text-2xl font-semibold"
+            style={{ color: "var(--color-base-ink)" }}
+          >
             {Math.round(dayTotals.calories)} kcal
           </p>
         </div>
+
         <div className="card p-4">
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          <p
+            className="text-sm"
+            style={{ color: "var(--color-base-muted)" }}
+          >
             Protein
           </p>
-          <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-white">
+          <p
+            className="mt-1 text-2xl font-semibold"
+            style={{ color: "var(--color-base-ink)" }}
+          >
             {Math.round(dayTotals.protein)} g
           </p>
         </div>
+
         <div className="card p-4">
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          <p
+            className="text-sm"
+            style={{ color: "var(--color-base-muted)" }}
+          >
             Carbs
           </p>
-          <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-white">
+          <p
+            className="mt-1 text-2xl font-semibold"
+            style={{ color: "var(--color-base-ink)" }}
+          >
             {Math.round(dayTotals.carbs)} g
           </p>
         </div>
+
         <div className="card p-4">
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          <p
+            className="text-sm"
+            style={{ color: "var(--color-base-muted)" }}
+          >
             Fat
           </p>
-          <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-white">
+          <p
+            className="mt-1 text-2xl font-semibold"
+            style={{ color: "var(--color-base-ink)" }}
+          >
             {Math.round(dayTotals.fat)} g
           </p>
         </div>
       </div>
 
       <div className="card p-4">
-        <h3 className="mb-1 font-semibold text-zinc-900 dark:text-white">
+        <h3
+          className="mb-1 font-semibold"
+          style={{ color: "var(--color-base-ink)" }}
+        >
           Macro calories distribution
         </h3>
-        <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
+        <p
+          className="mb-3 text-xs"
+          style={{ color: "var(--color-base-muted)" }}
+        >
           {selectedDate}
         </p>
 
@@ -397,18 +432,29 @@ export default function DietPanel() {
 
       <div className="grid gap-4">
         {byDay.length === 0 && !isLoading && (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          <p
+            className="text-sm"
+            style={{ color: "var(--color-base-muted)" }}
+          >
             No meals for this month.
           </p>
         )}
 
         {byDay.map(([day, items]) => (
           <div key={day}>
-            <p className="mb-2 flex items-baseline gap-2 text-sm font-medium text-zinc-600 dark:text-zinc-300">
-              <span>{day}</span>
-
+            <p className="mb-2 flex items-baseline gap-2 text-sm font-medium">
+              <span
+                style={{ color: "var(--color-base-ink)" }}
+              >
+                {day}
+              </span>
               <button
-                className="rounded-md border border-zinc-300 bg-white px-2 py-[2px] text-[10px] font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 active:scale-[0.98] dark:border-white/10 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700"
+                className="rounded-md border px-2 py-[2px] text-[10px] font-medium shadow-sm active:scale-[0.98]"
+                style={{
+                  backgroundColor: "var(--color-base-card)",
+                  borderColor: "var(--color-base-border)",
+                  color: "var(--color-base-ink)",
+                }}
                 onClick={() => setSelectedDate(day)}
               >
                 Focus day
@@ -419,7 +465,7 @@ export default function DietPanel() {
               <AnimatePresence initial={false}>
                 {items.map((m) => {
                   const exiting = exitingMealIds.has(m._id);
-                  const t = mealTotals(m);
+                  const totals = mealTotals(m);
                   const style = typeStyles[m.type];
 
                   return (
@@ -432,13 +478,10 @@ export default function DietPanel() {
                     >
                       <div
                         className={[
-                          "rounded-xl border p-3 shadow-sm transition-all",
+                          "rounded-xl border p-3 shadow-sm transition-colors",
                           exiting
                             ? "bg-red-100 border-red-500 text-[var(--color-base-ink)] dark:bg-red-900/40 dark:border-red-600"
                             : style.card,
-                          !exiting
-                            ? "hover:shadow-md hover:scale-[1.02] active:scale-[0.98]"
-                            : "",
                         ].join(" ")}
                       >
                         <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
@@ -458,21 +501,25 @@ export default function DietPanel() {
 
                           <div className="flex flex-wrap items-center gap-3 text-xs font-medium">
                             <span className="text-zinc-700 dark:text-zinc-200">
-                              {Math.round(t.calories)} kcal
+                              {Math.round(totals.calories)} kcal
                             </span>
                             <span className="text-emerald-700 dark:text-emerald-300">
-                              {Math.round(t.protein)}g P
+                              {Math.round(totals.protein)}g P
                             </span>
                             <span className="text-blue-700 dark:text-blue-300">
-                              {Math.round(t.carbs)}g C
+                              {Math.round(totals.carbs)}g C
                             </span>
                             <span className="text-amber-700 dark:text-amber-300">
-                              {Math.round(t.fat)}g F
+                              {Math.round(totals.fat)}g F
                             </span>
 
                             <button
                               className="text-red-600 transition-transform hover:scale-125 dark:text-red-400"
-                              onClick={() => handleImmediateDelete(m._id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                handleImmediateDelete(m._id);
+                              }}
                               aria-label="Delete meal"
                               title="Delete meal"
                             >
@@ -539,10 +586,11 @@ export default function DietPanel() {
                               ))}
                             </tbody>
                           </table>
+
                           <p className="mt-2 text-right text-xs font-medium text-zinc-800 dark:text-zinc-200">
                             Total:{" "}
                             <span className="font-semibold">
-                              {Math.round(t.calories)} kcal
+                              {Math.round(totals.calories)} kcal
                             </span>
                           </p>
                         </div>
@@ -557,7 +605,10 @@ export default function DietPanel() {
       </div>
 
       {isLoading && (
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+        <p
+          className="text-sm"
+          style={{ color: "var(--color-base-muted)" }}
+        >
           Loading…
         </p>
       )}
@@ -628,8 +679,18 @@ export default function DietPanel() {
             </label>
           </div>
 
-          <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-white/10 dark:bg-zinc-900">
-            <p className="mb-2 text-sm text-zinc-500 dark:text-zinc-400">
+          <div
+            className="rounded-xl border p-3"
+            style={{
+              backgroundColor: "var(--color-base-card)",
+              borderColor: "var(--color-base-border)",
+              color: "var(--color-base-ink)",
+            }}
+          >
+            <p
+              className="mb-2 text-sm"
+              style={{ color: "var(--color-base-muted)" }}
+            >
               Preview
             </p>
             {(() => {
@@ -644,9 +705,12 @@ export default function DietPanel() {
               );
               return (
                 <div className="flex flex-wrap gap-4 text-sm">
-                  <span>
-                    <strong>{Math.round(t.calories)}</strong>{" "}
-                    kcal
+                  <span
+                    style={{
+                      color: "var(--color-base-ink)",
+                    }}
+                  >
+                    <strong>{Math.round(t.calories)}</strong> kcal
                   </span>
                   <span className="text-emerald-700 dark:text-emerald-300">
                     <strong>{Math.round(t.protein)}</strong> g
@@ -663,6 +727,7 @@ export default function DietPanel() {
               );
             })()}
           </div>
+
           <div className="mt-1 grid gap-3">
             <div className="flex items-center justify-between">
               <p className="label">Items</p>
@@ -836,7 +901,10 @@ export default function DietPanel() {
       </Modal>
 
       {isLoading && (
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+        <p
+          className="text-sm"
+          style={{ color: "var(--color-base-muted)" }}
+        >
           Loading…
         </p>
       )}
